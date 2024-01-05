@@ -42,6 +42,7 @@ def main():
     parser.add_argument('-s', '--silent', action='store_true')
     parser.add_argument('-w', '--wordlist', default=None)
     parser.add_argument('-x', '--ext', default="")
+    parser.add_argument('--no-ssl', dest="no_ssl", action='store_true')
     args = parser.parse_args()
 
     url = args.url
@@ -53,7 +54,12 @@ def main():
     mode = args.mode
     wordlist_path = args.wordlist
     wordlist = []
+    no_ssl = args.no_ssl
     ext = args.ext
+    
+    if url is None:
+        co.yellow.printl("Missing URL flag '-u'")
+        exit(1)
 
     if mode not in positional_arg_list:
         co.red.printl(f"Invalid mode '{mode}'")
@@ -89,7 +95,7 @@ def main():
 
 
         
-    co.red.printl('''
+    co.red.printl(r'''
         __    __            __                               
         /  |  /  |          /  |                              
         $$ |  $$ |  ______  $$ |  ______    ______    ______  
@@ -117,19 +123,12 @@ def main():
         510, 511
       ]
         
-    req = xrequests.XploreRequest(url, gcode, mode, wl=wordlist)
+    size = "small" if use_small else "large"
+    use_https = True if not no_ssl else False
+        
+    req = xrequests.XploreRequest(url, gcode, mode, output=output, size=size, delay=delay, use_https=use_https, wl=wordlist)
     req.fuzz()
             
-    # types = ["php", "asp", "aspx"]
-
-    # if typ.lower() in types:
-    #     self.type = typ.lower()
-    # else:
-    #     colorizer.print(f"Invalid wordlist type {typ}").red
-    #     exit(1)
-        
-    # if size.lower() in ['small', 'large']:
-
 
 if __name__ == '__main__':
     positional_arg_list = ["php", "asp", "aspx", "html", "config", "ui_config", "xml", "general", "simple", "js", "routes", "apache", "nginx", "custom"]
