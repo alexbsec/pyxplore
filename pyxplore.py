@@ -1,6 +1,8 @@
 from src import xrequests, colorizer
 import argparse
+import asyncio
 import re
+import time
 
 global positional_arg_list
 
@@ -43,6 +45,7 @@ def main():
     parser.add_argument('-w', '--wordlist', default=None)
     parser.add_argument('-x', '--ext', default="")
     parser.add_argument('--no-ssl', dest="no_ssl", action='store_true')
+    parser.add_argument('--concurrent-count', dest="cc", default=10, type=int)
     args = parser.parse_args()
 
     url = args.url
@@ -51,6 +54,7 @@ def main():
     delay = args.delay if args.delay is not None else 0
     use_small = args.use_small
     silent = args.silent
+    cc = args.cc
     mode = args.mode
     wordlist_path = args.wordlist
     wordlist = []
@@ -93,7 +97,8 @@ def main():
         co.red.printl(f"Grep code format '{gcode}' does not match the expected.")
         exit(1)
 
-
+    size = "small" if use_small else "large"
+    use_https = True if not no_ssl else False
         
     co.red.printl(r'''
         __    __            __                               
@@ -109,11 +114,20 @@ def main():
                   $$ |                                        
                   $$/         
 ''')
+    co.green.printl("       v.0.1.0 - By alexbsec https://github.com/alexbsec")
+    print("---------------------------------------------------------")
+    time.sleep(1.5)
     co.white.printl("PARAMETERS:")
+    print("---------------------------------------------------------")
     co.green.printl(f"PyXplore list mode:            {mode}")
     co.green.printl(f"Grep status code:              {gcode}")
     co.green.printl(f"Delay:                         {delay} ms")
+    co.green.printl(f"Concurrent requests:           {cc} req/sec")
+    co.green.printl(f"Output file:                   {output}")
+    co.green.printl(f"Use https:                     {use_https}")
+    co.green.printl(f"Host:                          {url}")
     co.green.printl("Starting to \033[1mXplore...\033[0m")
+    time.sleep(1.5)
 
     if gcode == 'all':
         gcode = [100, 101, 102, 103, 200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300,
@@ -123,11 +137,18 @@ def main():
         510, 511
       ]
         
-    size = "small" if use_small else "large"
-    use_https = True if not no_ssl else False
+
         
-    req = xrequests.XploreRequest(url, gcode, mode, output=output, size=size, delay=delay, use_https=use_https, wl=wordlist)
-    req.fuzz()
+    req = xrequests.XploreRequest(url, gcode, mode, output=output, size=size, delay=delay, use_https=use_https, wl=wordlist, cc=cc)
+    try:
+        asyncio.run(req.fuzz())
+    except KeyboardInterrupt:
+        # Handle any additional cleanup here if necessary
+        co.green.printl("Cleanup complete. Exiting.")
+        exit(0)
+    except asyncio.exceptions.CancelledError:
+        co.red.printl("Cleanup failed. Exiting")
+        exit(1)
             
 
 if __name__ == '__main__':

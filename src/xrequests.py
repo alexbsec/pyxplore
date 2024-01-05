@@ -3,8 +3,13 @@ from . import colorizer
 import time
 import re
 import json
+import aiohttp
+import asyncio
+import async_timeout
 
 class XploreRequest(requests.Session):
+    WL_NAME = "wl-temp.txt"
+    
     WORDLISTS = {
                 'php': {
                         'small': 'https://wordlists-cdn.assetnote.io/data/manual/phpmillion.txt',
@@ -20,7 +25,7 @@ class XploreRequest(requests.Session):
     
     STATUS_DICT = {}
 
-    def __init__(self, url, gcode, typ, output=None, size='small', delay=0, use_https=True, wl=None):
+    def __init__(self, url, gcode, typ, output=None, size='small', delay=0, use_https=True, wl=None, cc=10):
         # check url format
         super().__init__()
         if not (url.startswith('https://') or url.startswith('http://')):
@@ -38,10 +43,11 @@ class XploreRequest(requests.Session):
         self.size = size
         self.co = colorizer.ColorOutput()
         self.wordlist = wl
+        self.cc = cc
         
         for code in gcode:
             self.STATUS_DICT[code] = []
-        
+            
     def coprint(self, text):
         # Extract status code from the string
         match = re.search(r"\[(\d{3})\]", text)
@@ -62,18 +68,17 @@ class XploreRequest(requests.Session):
             # Handle cases where the status code is not found
             self.co.white.print(text)
         
-    def make_request(self, wl_res):
+    async def make_request(self, session, word):
         try:
-            for line in wl_res.iter_lines(decode_unicode=True):
-                time.sleep(self.delay)
-                word = line.strip()
-                word = word[1:] if word.startswith('/') else word
-                url = f"{self.url}{word}"
-                res = self.get(url)
-                if res.status_code in self.gcode:
-                    self.coprint(f"[{res.status_code}] ")
-                    self.STATUS_DICT[res.status_code].append(url)
-                    print(url)
+            word = word[1:] if word.startswith('/') else word
+            url = f"{self.url}{word}"
+            async with async_timeout.timeout(10):  # Set timeout for each request
+                async with session.get(url) as res:
+                    if res.status in self.gcode:
+                        self.coprint(f"[{res.status}] ")
+                        self.STATUS_DICT[res.status].append(url)
+                        print(url)
+            await asyncio.sleep(self.delay)  # Non-blocking sleep
         except ConnectionResetError:
             self.co.red.printl("Connection reset by peer")
             exit(1)
@@ -81,39 +86,39 @@ class XploreRequest(requests.Session):
             print()
             self.co.red.printl("Xplore terminated by user")
             exit(0)
-            
-    def make_custom_request(self):
-        try:
-            for word in self.wordlist:
-                time.sleep(self.delay)
-                word = word[1:] if word.startswith('/') else word
-                url = f"{self.url}{word}"
-                res = self.get(url)
-                if res.status_code in self.gcode:
-                    self.coprint(f"[{res.status_code}] ")
-                    self.STATUS_DICT[res.status_code].append(url)
-                    print(url)
-        except ConnectionResetError:
-            self.co.red.printl("Connection reset by peer")
-            exit(1)
-        except KeyboardInterrupt:
-            print()
-            self.co.red.printl("Xplore terminated by user")
-            exit(0)
+        except asyncio.CancelledError:
+            self.co.yellow.printl(f"Task cancelled: {word}")
+            self.co.yellow.printl("Cleaning up next...")
+            return
+        except Exception as e:
+            self.co.red.printl(f"{e}")
+            return
             
     def save_to_output(self):
         with open(f"{self.output}.json", 'w') as jf:
             json.dump(self.STATUS_DICT, jf)
         
-    def fuzz(self):
-        if self.type != "custom":
-            wl_url = self.WORDLISTS[self.type][self.size]
-            with self.get(wl_url, stream=True) as wl_res:
-                wl_res.raise_for_status()
-                self.make_request(wl_res)
-        else:
-            self.make_custom_request()
-        
+    async def fuzz(self):
+        async with aiohttp.ClientSession() as session:
+            semaphore = asyncio.Semaphore(self.cc)
+            tasks = []
+
+            async def sem_task(word):
+                async with semaphore:
+                    await self.make_request(session, word)
+                    
+            if self.type != "custom":
+                # Stream the wordlist and create tasks on-the-fly
+                async with session.get(self.WORDLISTS[self.type][self.size], timeout=60) as res:
+                    res.raise_for_status()
+                    async for line in res.content:
+                        word = line.decode('utf-8').strip()
+                        task = asyncio.create_task(sem_task(word))
+                        tasks.append(task)
+
+            await asyncio.gather(*tasks, return_exceptions=True)
+            
+        print("\nFuzzing complete.")
+
         if self.output is not None:
             self.save_to_output()
-
