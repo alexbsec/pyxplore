@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: pyxplore
+Version: 0.1.0
+Requires-Dist: requests==2.31.0
+Requires-Dist: colorama==0.4.6
+Requires-Dist: aiohttp==3.9.1
+Requires-Dist: async-timeout==4.0.3

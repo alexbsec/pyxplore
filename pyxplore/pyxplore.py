@@ -1,10 +1,8 @@
-from src import xrequests, colorizer
+from . import xrequests, colorizer
 import argparse
 import asyncio
 import re
 import time
-
-global positional_arg_list
 
 def safe_convert_to_i(value):
     try:
@@ -30,11 +28,13 @@ def check_gcode_status(input):
     return False
 
 def main():
+    positional_arg_list = ["php", "asp", "aspx", "html", "config", "ui_config", "xml", "general", "simple", "js", "routes", "apache", "nginx", "custom"]
     co = colorizer.ColorOutput()
     parser = argparse.ArgumentParser(
         prog='PyXplore',
         description="Web Fuzzer"
     )
+
     parser.add_argument('mode', help="specify a positional argument: [php|asp|aspx|html|config|ui_config|massive|general|apache|nginx|js|routes|custom]")
     parser.add_argument('-u', '--url', type=str)
     parser.add_argument('-g', '--grep-code')
@@ -44,6 +44,7 @@ def main():
     parser.add_argument('-s', '--silent', action='store_true')
     parser.add_argument('-w', '--wordlist', default=None)
     parser.add_argument('-x', '--ext', default="")
+    parser.add_argument('--verbose', '-v', action='count', default=0)
     parser.add_argument('--no-ssl', dest="no_ssl", action='store_true')
     parser.add_argument('--concurrent-count', dest="cc", default=10, type=int)
     args = parser.parse_args()
@@ -60,10 +61,16 @@ def main():
     wordlist = []
     no_ssl = args.no_ssl
     ext = args.ext
+    verbose = args.verbose
     
     if url is None:
         co.yellow.printl("Missing URL flag '-u'")
         exit(1)
+
+    if url.startswith("http://"):
+        no_ssl = True
+    elif url.startswith("https://"):
+        no_ssl = False
 
     if mode not in positional_arg_list:
         co.red.printl(f"Invalid mode '{mode}'")
@@ -139,12 +146,12 @@ def main():
         
 
         
-    req = xrequests.XploreRequest(url, gcode, mode, output=output, size=size, delay=delay, use_https=use_https, wl=wordlist, cc=cc)
+    req = xrequests.XploreRequest(url, gcode, mode, output=output, size=size, delay=delay, use_https=use_https, wl=wordlist, cc=cc, verbosity=verbose)
     try:
         asyncio.run(req.fuzz())
     except KeyboardInterrupt:
         # Handle any additional cleanup here if necessary
-        co.green.printl("Cleanup complete. Exiting.")
+        co.yellow.printl("Exiting...")
         exit(0)
     except asyncio.exceptions.CancelledError:
         co.red.printl("Cleanup failed. Exiting")
@@ -152,5 +159,4 @@ def main():
             
 
 if __name__ == '__main__':
-    positional_arg_list = ["php", "asp", "aspx", "html", "config", "ui_config", "xml", "general", "simple", "js", "routes", "apache", "nginx", "custom"]
     main()

@@ -10,8 +10,8 @@ class ColorOutput:
     def print(self, text):
         sys.stdout.buffer.write((self.current_color + text + Fore.RESET).encode('utf-8'))
 
-    def printl(self, text):
-        print(self.current_color + text + Fore.RESET)
+    def printl(self, text, end=None):
+        print(self.current_color + text + Fore.RESET, end=end)
 
     def __getattr__(self, color):
         # Check if the color is a valid Colorama foreground color

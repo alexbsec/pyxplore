@@ -1,0 +1,13 @@
+README.md
+setup.py
+pyxplore/__init__.py
+pyxplore/colorizer.py
+pyxplore/greppy.py
+pyxplore/pyxplore.py
+pyxplore/xrequests.py
+pyxplore.egg-info/PKG-INFO
+pyxplore.egg-info/SOURCES.txt
+pyxplore.egg-info/dependency_links.txt
+pyxplore.egg-info/entry_points.txt
+pyxplore.egg-info/requires.txt
+pyxplore.egg-info/top_level.txt

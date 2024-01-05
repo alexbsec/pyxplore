@@ -25,7 +25,7 @@ class XploreRequest(requests.Session):
     
     STATUS_DICT = {}
 
-    def __init__(self, url, gcode, typ, output=None, size='small', delay=0, use_https=True, wl=None, cc=10):
+    def __init__(self, url, gcode, typ, output=None, size='small', delay=0, use_https=True, wl=None, cc=10, verbosity=0):
         # check url format
         super().__init__()
         if not (url.startswith('https://') or url.startswith('http://')):
@@ -44,6 +44,8 @@ class XploreRequest(requests.Session):
         self.co = colorizer.ColorOutput()
         self.wordlist = wl
         self.cc = cc
+        self.verbosity = verbosity
+        self.matches = 0
         
         for code in gcode:
             self.STATUS_DICT[code] = []
@@ -77,6 +79,7 @@ class XploreRequest(requests.Session):
                     if res.status in self.gcode:
                         self.coprint(f"[{res.status}] ")
                         self.STATUS_DICT[res.status].append(url)
+                        self.matches += 1
                         print(url)
             await asyncio.sleep(self.delay)  # Non-blocking sleep
         except ConnectionResetError:
@@ -87,11 +90,14 @@ class XploreRequest(requests.Session):
             self.co.red.printl("Xplore terminated by user")
             exit(0)
         except asyncio.CancelledError:
-            self.co.yellow.printl(f"Task cancelled: {word}")
-            self.co.yellow.printl("Cleaning up next...")
+            if self.verbosity >= 1:
+                self.co.yellow.printl(f"Task cancelled: {word}")
+                if self.verbosity >= 2:
+                    self.co.yellow.printl("Cleaning up next...")
             return
         except Exception as e:
-            self.co.red.printl(f"{e}")
+            if self.verbosity >= 1:
+                self.co.red.printl(f"{e}")
             return
             
     def save_to_output(self):
@@ -103,22 +109,34 @@ class XploreRequest(requests.Session):
             semaphore = asyncio.Semaphore(self.cc)
             tasks = []
 
-            async def sem_task(word):
+            async def sem_task(word, c):
                 async with semaphore:
+                    output = f"Progress: {c}/{len(self.wordlist)} payloads sent" if len(self.wordlist) > 0 else f"Progress: {c} payloads sent"
+                    self.co.white.printl(output, end="\r")
                     await self.make_request(session, word)
                     
             if self.type != "custom":
                 # Stream the wordlist and create tasks on-the-fly
                 async with session.get(self.WORDLISTS[self.type][self.size], timeout=60) as res:
                     res.raise_for_status()
+                    c = 0
                     async for line in res.content:
                         word = line.decode('utf-8').strip()
-                        task = asyncio.create_task(sem_task(word))
+                        task = asyncio.create_task(sem_task(word, c))
                         tasks.append(task)
+                        c += 1
+            else:
+                c = 0
+                for word in self.wordlist:
+                    task = asyncio.create_task(sem_task(word, c))
+                    tasks.append(task)
+                    c += 1
+                    
 
             await asyncio.gather(*tasks, return_exceptions=True)
+        
             
-        print("\nFuzzing complete.")
+        self.co.white.printl(f"\nPyXplore fuzzing complete. Found {self.matches} pages")
 
         if self.output is not None:
             self.save_to_output()
