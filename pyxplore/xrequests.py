@@ -57,30 +57,39 @@ class XploreRequest(requests.Session):
             status_code = match.group(1) 
 
             if re.match(r"^2\d{2}$", status_code):
-                self.co.green.print(text)
+                return self.co.green.colorize(text)
             elif re.match(r"^3\d{2}$", status_code):
-                self.co.blue.print(text)
+                return self.co.blue.colorize(text)
             elif re.match(r"^4\d{2}$", status_code):
-                self.co.red.print(text)
+                return self.co.red.colorize(text)
             elif re.match(r"^5\d{2}$", status_code):
-                self.co.red.print(text)
+                return self.co.red.colorize(text)
             else:
-                self.co.white.print(text)
+                return self.co.white.colorize(text)
         else:
             # Handle cases where the status code is not found
-            self.co.white.print(text)
+            return self.co.white.colorize(text)
         
     async def make_request(self, session, word):
+        max_len = 70
         try:
             word = word[1:] if word.startswith('/') else word
             url = f"{self.url}{word}"
             async with async_timeout.timeout(10):  # Set timeout for each request
-                async with session.get(url) as res:
+                async with session.get(url, allow_redirects=False) as res:
                     if res.status in self.gcode:
-                        self.coprint(f"[{res.status}] ")
-                        self.STATUS_DICT[res.status].append(url)
                         self.matches += 1
-                        print(url)
+                        print('='*max_len)
+                        self.STATUS_DICT[res.status].append(url)
+                        if self.verbosity >= 1:
+                            content = await res.read()
+                            status = f"[{res.status}]"
+                            byte_size = len(content)
+                            diff = max_len - len(url)
+                            if diff < 0: diff = 0
+                            self.co.white.printl(f"{self.coprint(status)} {url} " + "-"*diff + f" Size: {byte_size}")
+                        else:
+                            self.co.white.printl(url)
             await asyncio.sleep(self.delay)  # Non-blocking sleep
         except ConnectionResetError:
             self.co.red.printl("Connection reset by peer")
@@ -112,7 +121,7 @@ class XploreRequest(requests.Session):
             async def sem_task(word, c):
                 async with semaphore:
                     output = f"Progress: {c}/{len(self.wordlist)} payloads sent" if len(self.wordlist) > 0 else f"Progress: {c} payloads sent"
-                    self.co.white.printl(output, end="\r")
+                    self.co.white.printl(output, end="\r", flush=True)
                     await self.make_request(session, word)
                     
             if self.type != "custom":
