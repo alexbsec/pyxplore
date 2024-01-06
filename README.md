@@ -11,11 +11,14 @@ PyXplore is a versatile web fuzzer designed to explore and scan web applications
 - Output logging in JSON format.
 
 ## Installation
-Clone the repository and install the necessary Python packages:
+Clone the repository and install pyxplore in one virtual environment:
+
 ```bash
 git clone https://github.com/alexbsec/pyxplore.git
+python -m venv ~/.pyvenv
+source ~/.pyvenv/bin/activate
 cd pyxplore
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Usage
@@ -23,7 +26,7 @@ pip install -r requirements.txt
 Run PyXplore with various command-line arguments to tailor the fuzzing process to your needs:
 
 ```bash
-python pyxplore.py <mode> -u <url> [options]
+pyxplore <mode> -u <url> [options]
 ```
 
 ### Arguments
